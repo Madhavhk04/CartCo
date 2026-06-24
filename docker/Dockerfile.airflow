@@ -1,0 +1,31 @@
+FROM apache/airflow:2.7.2-python3.10
+
+USER root
+
+# Install OpenJDK-17 and basic tools
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        openjdk-17-jdk-headless \
+        procps \
+        git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set JAVA_HOME
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+USER airflow
+
+# Install Python packages required for the Spark processing and DQ pipelines
+RUN pip install --no-cache-dir \
+    pyspark==3.4.1 \
+    delta-spark==2.4.0 \
+    great_expectations==0.17.23 \
+    openlineage-airflow==1.7.0 \
+    openlineage-python==1.7.0 \
+    deltalake==0.10.0 \
+    psycopg2-binary==2.9.9 \
+    graphviz==0.20.1 \
+    plotly==5.18.0 \
+    pytest==7.4.3

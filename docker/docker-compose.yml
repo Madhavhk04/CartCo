@@ -1,0 +1,198 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: cartco-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2023-11-20T22-40-07Z
+    container_name: cartco-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/9000"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: cartco-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./minio_init.sh:/scripts/minio_init.sh
+    entrypoint: /bin/sh
+    command: /scripts/minio_init.sh
+
+  marquez-api:
+    image: marquezproject/marquez:0.38.0
+    container_name: cartco-marquez-api
+    ports:
+      - "5000:5000"
+    environment:
+      - MARQUEZ_DB_HOST=postgres
+      - MARQUEZ_DB_PORT=5432
+      - MARQUEZ_DB_NAME=marquez
+      - MARQUEZ_DB_USER=postgres
+      - MARQUEZ_DB_PASSWORD=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  marquez-web:
+    image: marquezproject/marquez-web:0.38.0
+    container_name: cartco-marquez-web
+    ports:
+      - "3000:3000"
+    environment:
+      - MARQUEZ_API_URL=http://marquez-api:5000
+    depends_on:
+      - marquez-api
+
+  airflow-init:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.airflow
+    container_name: cartco-airflow-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:postgres@postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname Admin \
+          --role Admin \
+          --email admin@cartco.com \
+          --password admin
+
+  airflow-webserver:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.airflow
+    container_name: cartco-airflow-webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:postgres@postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - OPENLINEAGE_URL=http://marquez-api:5000
+      - OPENLINEAGE_NAMESPACE=cartco-lakehouse
+      - 'AIRFLOW__OPENLINEAGE__TRANSPORT={"type": "http", "url": "http://marquez-api:5000", "endpoint": "api/v1/lineage"}'
+    volumes:
+      - ../dags:/opt/airflow/dags
+      - ../spark_jobs:/opt/airflow/spark_jobs
+      - ../data:/opt/airflow/data
+      - ../tests:/opt/airflow/tests
+    command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.airflow
+    container_name: cartco-airflow-scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:postgres@postgres/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - OPENLINEAGE_URL=http://marquez-api:5000
+      - OPENLINEAGE_NAMESPACE=cartco-lakehouse
+      - 'AIRFLOW__OPENLINEAGE__TRANSPORT={"type": "http", "url": "http://marquez-api:5000", "endpoint": "api/v1/lineage"}'
+    volumes:
+      - ../dags:/opt/airflow/dags
+      - ../spark_jobs:/opt/airflow/spark_jobs
+      - ../data:/opt/airflow/data
+      - ../tests:/opt/airflow/tests
+    command: scheduler
+
+  api-backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: cartco-api-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_ENDPOINT_URL=http://minio:9000
+      - MARQUEZ_API_URL=http://marquez-api:5000
+      - AIRFLOW_DB_URL=postgresql+psycopg2://postgres:postgres@postgres/airflow
+    volumes:
+      - ../data:/app/data
+    depends_on:
+      minio:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  react-frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: cartco-react-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - api-backend
+
+volumes:
+  postgres_data:
+  minio_data:
