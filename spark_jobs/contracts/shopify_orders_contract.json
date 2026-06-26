@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ShopifyOrdersContract",
+  "type": "object",
+  "description": "Strict schema layout defining the data contract for Shopify Ingest records.",
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_\\-]+$"
+    },
+    "customer_id": {
+      "type": "string",
+      "pattern": "^CUST_[0-9]+$"
+    },
+    "product_id": {
+      "type": "string",
+      "pattern": "^PROD_[0-9]+$"
+    },
+    "unit_price": {
+      "type": "number",
+      "minimum": 0.0
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "discount": {
+      "type": "number",
+      "minimum": 0.0
+    },
+    "shipping_fee": {
+      "type": "number",
+      "minimum": 0.0
+    },
+    "taxes": {
+      "type": "number",
+      "minimum": 0.0
+    },
+    "order_date": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "order_id",
+    "customer_id",
+    "product_id",
+    "unit_price",
+    "quantity",
+    "order_date"
+  ]
+}
