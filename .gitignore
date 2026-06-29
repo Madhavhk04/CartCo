@@ -220,3 +220,16 @@ __marimo__/
 # Local data directory for simulated datasets
 data/
 
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc

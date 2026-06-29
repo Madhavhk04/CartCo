@@ -21,7 +21,6 @@ variable "db_username" {
 variable "db_password" {
   type        = string
   description = "Database administrator password (use Secrets Manager in production)"
-  default     = "CartCoPassSecure2026!"
   sensitive   = true
 }
 
