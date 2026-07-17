@@ -3,7 +3,11 @@
 [![Delta Lake](https://img.shields.io/badge/Table%20Format-Delta%20Lake-blue.svg)](https://delta.io/)
 [![Orchestration](https://img.shields.io/badge/Orchestrator-Apache%20Airflow-red.svg)](https://airflow.apache.org/)
 [![Observability](https://img.shields.io/badge/Metadata-OpenLineage%20%2F%20Marquez-pink.svg)](https://marquezproject.github.io/marquez/)
-[![Quality](https://img.shields.io/badge/Data%20Quality-Great%20Expectations-green.svg)](https://greatexpectations.io/)
+[![Quality](https://img.shields.io/badge/Data%20Quality-Great%20Expectations-green.svg)](https://greatexexpectations.io/)
+
+### 🌐 Live Deployment
+*   **Interactive Dashboard**: [https://cartco-production.up.railway.app](https://cartco-production.up.railway.app)
+*   **FastAPI Backend Service**: [https://backend-production-5d52.up.railway.app/api](https://backend-production-5d52.up.railway.app/api)
 
 A multi-channel retail Lakehouse architecture planned for **CartCo**. The proposed platform will consolidate fragmented transaction and inventory data from **Shopify, Amazon, Flipkart, and physical retail outlets** into a standardized, audited, and observable Single Source of Truth (SSOT) to eliminate operational blind spots and inventory discrepancies.
 
