@@ -69,8 +69,13 @@ def load_table(table_name):
     # 2. Fallback loader
     data_dir = os.getenv("DATA_DIR", "data")
     if not os.path.exists(data_dir):
-        # Check workspace relative directory
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+        # Check local backend/data directory first
+        local_data = os.path.join(os.path.dirname(__file__), "data")
+        if os.path.exists(local_data):
+            data_dir = local_data
+        else:
+            # Check workspace relative directory
+            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
         
     try:
         if table_name == "gold_daily_revenue":

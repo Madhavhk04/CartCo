@@ -33,9 +33,11 @@ import {
 } from 'recharts';
 import './App.css';
 
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? "http://localhost:8000/api"
-  : `http://${window.location.hostname}:8000/api`;
+const API_BASE = import.meta.env.VITE_API_BASE || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? "http://localhost:8000/api"
+    : `http://${window.location.hostname}:8000/api`
+);
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#06b6d4', '#ec4899', '#10b981'];
 
