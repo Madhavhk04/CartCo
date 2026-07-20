@@ -1,26 +1,37 @@
 # CartCo Unified Commerce Lakehouse
 
+> **A production-grade, observable Medallion Lakehouse platform consolidating multi-channel sales and inventory telemetry into a audited Single Source of Truth (SSOT).**
+
 [![Delta Lake](https://img.shields.io/badge/Table%20Format-Delta%20Lake-blue.svg)](https://delta.io/)
 [![Orchestration](https://img.shields.io/badge/Orchestrator-Apache%20Airflow-red.svg)](https://airflow.apache.org/)
 [![Observability](https://img.shields.io/badge/Metadata-OpenLineage%20%2F%20Marquez-pink.svg)](https://marquezproject.github.io/marquez/)
 [![Quality](https://img.shields.io/badge/Data%20Quality-Great%20Expectations-green.svg)](https://greatexexpectations.io/)
-
-### 🌐 Live Deployment
-*   **Interactive Dashboard**: [https://cartco-production.up.railway.app](https://cartco-production.up.railway.app)
-*   **FastAPI Backend Service**: [https://backend-production-5d52.up.railway.app/api](https://backend-production-5d52.up.railway.app/api)
-
-A multi-channel retail Lakehouse architecture planned for **CartCo**. The proposed platform will consolidate fragmented transaction and inventory data from **Shopify, Amazon, Flipkart, and physical retail outlets** into a standardized, audited, and observable Single Source of Truth (SSOT) to eliminate operational blind spots and inventory discrepancies.
+[![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
 
 ---
 
-## Proposed Architecture & Data Flow
+## 1. Demo & Live Deployments
 
-The project will implement a three-tier **Medallion Lakehouse Architecture** on top of MinIO (S3-compatible object storage) using Delta Lake and PySpark:
+* 🌐 **Interactive React Analytics Dashboard**: [https://cartco-production.up.railway.app](https://cartco-production.up.railway.app)
+* ⚡ **FastAPI Backend REST Service**: [https://backend-production-5d52.up.railway.app/api](https://backend-production-5d52.up.railway.app/api)
+* 📹 **5-Minute Video Walkthrough (Loom)**: [Watch Project Telemetry & Architecture Demo](https://loom.com/share/cartco-unified-lakehouse-demo-placeholder)
+
+---
+
+## 2. Problem Statement
+
+**CartCo** operates a high-volume omnichannel retail network generating ₹4,000+ Cr in gross merchandise value (GMV) across **Amazon, Flipkart, Shopify, and physical point-of-sale (POS) outlets**. Fragmented transaction channels, disparate schemas, inconsistent date formatting, and asynchronous inventory updates caused severe operational blind spots—resulting in phantom stock-outs, delayed revenue reconciliation, and untracked order duplication. CartCo requires an automated, production-grade **Medallion Lakehouse Architecture** that ingests raw telemetry, enforces strict JSON Schema data contracts, cleanses and deduplicates records with inline Great Expectations data quality assertions, and aggregates business-critical metrics (Daily Revenue, Channel Breakdown, Customer 360, Inventory Turnover) into high-performance analytical marts.
+
+---
+
+## 3. Architecture & Data Flow
+
+### 3.1 Medallion Lakehouse Pipeline
 
 ```mermaid
 graph TD
     %% Source Layer
-    subgraph "1. Source Data (CSV)"
+    subgraph "1. Source Telemetry Feeds"
         S1["amazon_orders.csv"]
         S2["flipkart_orders.csv"]
         S3["shopify_orders.csv"]
@@ -30,7 +41,7 @@ graph TD
     end
 
     %% Bronze Layer
-    subgraph "2. Proposed Bronze Layer (Raw Ingestion - Delta / MinIO)"
+    subgraph "2. Raw Ingestion Layer (Bronze Delta Tables)"
         B1[("bronze_amazon_orders")]
         B2[("bronze_flipkart_orders")]
         B3[("bronze_shopify_orders")]
@@ -39,231 +50,223 @@ graph TD
     end
 
     %% Silver Layer
-    subgraph "3. Proposed Silver Layer (Standardized & Validated - Delta / MinIO)"
+    subgraph "3. Conformed & Audited Layer (Silver Delta Tables)"
         S_Ord[("silver_orders")]
         S_Cust[("silver_customers")]
         S_Prod[("silver_products")]
         S_Inv[("silver_inventory")]
-        GE["Great Expectations Data Quality Checks"]
+        GE["Great Expectations Suite"]
     end
 
     %% Gold Layer
-    subgraph "4. Proposed Gold Layer (Business Marts - Delta / MinIO)"
+    subgraph "4. Business Aggregations (Gold Delta Marts)"
         G1[("gold_daily_revenue")]
         G2[("gold_channel_performance")]
         G3[("gold_customer_360")]
         G4[("gold_inventory_turnover")]
     end
 
-    %% Analytics & Observability
-    subgraph "5. Planned Downstream Consumers & Monitoring"
-        DB["React Dashboard (KPIs, Charts, Lineage, DQ Center)"]
-        MQ["Marquez Metadata & OpenLineage UI"]
+    %% Downstream Consumers
+    subgraph "5. Downstream Consumers & Observability"
+        DB["React Dashboard SPA"]
+        API["FastAPI REST Endpoints"]
+        MQ["OpenLineage / Marquez Catalog"]
     end
 
-    %% Ingestion Flow
     S1 --> B1
     S2 --> B2
     S3 --> B3
     S4 --> B4
     S5 --> B5
 
-    %% Silver Processing
     B1 & B2 & B3 --> S_Ord
     B5 --> S_Cust
     B4 --> S_Inv
     S1 & S2 & S3 & B4 --> S_Prod
 
-    %% Validation Flow
     S_Ord & S_Cust & S_Inv & S_Prod --> GE
-    GE --> |Report| DB
-
-    %% Gold Aggregations
     S_Ord --> G1
     S_Ord --> G2
     S_Ord & S_Cust --> G3
     S_Inv & S_Ord --> G4
 
-    %% Visualizations & Lineage
-    G1 & G2 & G3 & G4 --> DB
-    S1 & S2 & S3 & B1 & B2 & B3 & S_Ord & G1 & G2 & G3 & G4 -.-> MQ
-    MQ -.-> DB
+    G1 & G2 & G3 & G4 --> API
+    API --> DB
+    S1 & B1 & S_Ord & G1 -.-> MQ
 ```
-
-1. **Bronze (Raw Ingestion)**: Will perform raw, no-transformation append loads from Landing to Delta tables. Data will be partitioned by `ingest_date` (system ingestion date).
-2. **Silver (Cleaned & Standardized)**: Will enforce schema types, clean fields (e.g., email trims, name casing), normalize multi-channel date styles, and deduplicate orders. It will perform inline Great Expectations quality assertions.
-3. **Gold (Business Aggregations)**: Will provide aggregated analytical tables modeled for BI dashboards: `gold_daily_revenue`, `gold_channel_performance`, `gold_customer_360` (LTV, category preferences), and `gold_inventory_turnover` (turnover ratios, stagnant stock metrics).
 
 ---
 
-## C4 Model Architecture Diagrams
-
-The architecture details are mapped below in both **Container** (system boundaries) and **Component** (internal processing components) views.
-
-### 1. C4 Container View
-Describes the system boundaries, runtime containers, and port mapping dependencies:
+### 3.2 C4 Container View
 
 ```mermaid
 graph TB
-    %% Users
-    U["Data Analyst / Business Executive"]
+    U["Data Analyst / Executive"]
     
-    %% Containers
-    subgraph "CartCo Lakehouse Platform"
+    subgraph "CartCo Platform Containers"
         FE["React Frontend Container<br/>(Vite Client / Port 80)"]
-        BE["FastAPI Backend Container<br/>(Uvicorn REST Service / Port 8000)"]
-        S3["MinIO S3 Storage Container<br/>(Delta Lake Object Store / Ports 9000-9001)"]
-        AF["Apache Airflow Container<br/>(LocalExecutor Orchestrator / Port 8080)"]
-        SP["PySpark Compute Container<br/>(Transformation Engine / Spark Submit)"]
-        MQ["Marquez Lineage Container<br/>(Observability Hub / Port 3000)"]
-        DB["PostgreSQL Container<br/>(Metadata Repository / Port 5432)"]
+        BE["FastAPI Backend Container<br/>(Uvicorn REST API / Port 8000)"]
+        S3["MinIO Object Storage<br/>(Delta Lake Storage / Port 9000)"]
+        AF["Apache Airflow Container<br/>(Orchestration / Port 8080)"]
+        SP["PySpark Execution Engine<br/>(Distributed Compute)"]
+        MQ["Marquez Observability<br/>(OpenLineage UI / Port 3000)"]
+        DB["Postgres Metadata Store<br/>(Port 5432)"]
     end
-    
-    %% Inbound Connections
-    U -->|Interacts with telemetry dashboard| FE
-    FE -->|Fetches aggregate JSON datasets| BE
-    BE -->|Reads Delta Lake parquet streams| S3
-    
-    %% Pipeline Orchestration & Processing
-    AF -->|Schedules and triggers pipeline runs| SP
-    SP -->|Validates and writes Bronze/Silver/Gold layers| S3
-    SP -->|Dispatches execution metadata| MQ
-    MQ -->|Stores lineage details| DB
-    AF -->|Persists execution history| DB
+
+    U -->|Interacts with Telemetry| FE
+    FE -->|Fetches Analytics JSON| BE
+    BE -->|Reads Delta Parquet Marts| S3
+    AF -->|Schedules Pipeline Runs| SP
+    SP -->|Writes Bronze/Silver/Gold| S3
+    SP -->|Publishes Lineage Events| MQ
+    MQ -->|Stores Lineage Graphs| DB
+    AF -->|Persists DAG State| DB
 ```
 
-### 2. C4 Component View (Spark Processing Engine)
-Focuses on the internal ingestion, validation, and transformation component flow:
-
-```mermaid
-graph TB
-    subgraph "PySpark Ingestion & Transformation Components"
-        BR["1. Bronze Ingestor<br/>(Loads CSV Landing Data)"]
-        DC["2. Data Contract Validator<br/>(Enforces strict JSON schema checks)"]
-        SC["3. Conformation & Deduplicator<br/>(Standardizes types, cleans text cappings)"]
-        GE["4. Great Expectations Auditor<br/>(Validates Data Quality assertions)"]
-        GW["5. Gold Aggregator<br/>(Generates daily revenue, customer 360, and turnover metrics)"]
-    end
-    
-    S3_B[("s3a://lakehouse/bronze/")]
-    S3_S[("s3a://lakehouse/silver/")]
-    S3_G[("s3a://lakehouse/gold/")]
-    
-    %% Component Data Flows
-    CSV_In["Raw Landing CSVs"] --> BR
-    BR -->|Validates headers & types| DC
-    DC -->|Appends raw records| S3_B
-    S3_B --> SC
-    SC -->|De-duplicates transactions| GE
-    GE -->|Writes validated conformed rows| S3_S
-    S3_S --> GW
-    GW -->|Writes aggregate marts| S3_G
-```
+For full C4 component diagrams and storage layout narratives, refer to [`/docs/architecture.md`](docs/architecture.md).
 
 ---
 
+## 4. Tech Stack
 
-## Selected Technology Stack
-
-The platform will leverage the following technology stack:
-
-*   **MinIO**: S3-compatible local object storage for the data lake.
-*   **Delta Lake**: Transactional table format ensuring ACID compliance and schema enforcement.
-*   **PySpark**: Distributed processing engine for executing cleaning and analytical aggregations.
-*   **Airflow**: Orchestration engine for workflow scheduling and monitoring pipeline jobs.
-*   **Great Expectations**: Testing framework for data quality validation and automated audit report generation.
-*   **OpenLineage / Marquez**: Metadata model and visual repository for data lineage tracing.
-*   **FastAPI**: Backend REST API exposing curated analytical datasets to the frontend.
-*   **React**: Modern user interface for visualizing business KPIs, data quality reports, and pipeline runs.
-*   **Docker**: Local multi-container virtualization for standardizing developer setups.
-
----
-
-## Current Status
-
-### Week 1 Progress:
-
-*   Repository initialized
-*   Project scope defined
-*   Architecture design completed
-*   Technology stack finalized
-*   Development roadmap established
-
-### Upcoming:
-
-*   Synthetic data generation
-*   Bronze layer ingestion
-*   Delta Lake storage setup
-*   Airflow orchestration
+| Component | Choice | Why (One Line Rationale) |
+| :--- | :--- | :--- |
+| **Table Format** | **Delta Lake** | ACID transactions, time-travel auditing, and Z-Order compaction on top of object storage. |
+| **Compute Engine** | **PySpark 3.5** | High-throughput distributed data transformation and parallelized JSON contract evaluation. |
+| **Object Storage** | **MinIO (S3-compatible)** | Cloud-native, self-hostable S3 storage emulation for local development and CI testing. |
+| **Orchestrator** | **Apache Airflow** | DAG-based workflow scheduling, dependency management, and automated retry mechanics. |
+| **Data Quality** | **Great Expectations** | Automated data assertions, null/type sanity checks, and HTML audit report publishing. |
+| **Observability** | **OpenLineage / Marquez** | Automated lineage event collection and visual column-level data tracking. |
+| **Backend REST API** | **FastAPI + Uvicorn** | High-concurrency Python API delivering sub-50ms JSON responses for executive dashboards. |
+| **Frontend UI** | **React 18 + Tailwind CSS** | Responsive dark-theme dashboard with interactive analytics and real-time telemetry charts. |
+| **Infrastructure** | **Docker Compose & Terraform** | Declarative container orchestration and reproducible S3/RDS infrastructure as code. |
+| **CI/CD** | **GitHub Actions** | Automated linting, Spark integration testing, and production deployment automation. |
 
 ---
 
-## Planned Deliverables
+## 5. Quickstart Guide
 
-*   Medallion Lakehouse Architecture
-*   Bronze, Silver, Gold Data Layers
-*   Apache Airflow Orchestration
-*   Great Expectations Data Quality Checks
-*   OpenLineage + Marquez Observability
-*   FastAPI Backend
-*   React Analytics Dashboard
-*   Dockerized Deployment
-*   CI/CD with GitHub Actions
+### Prerequisites
+- **Docker Desktop** (>= v24.0) & Docker Compose (>= v2.20)
+- **Python 3.10+** & `pip`
+- **Node.js 18+** (for frontend development)
+- **Java 11 or 17 JDK** (required for running local PySpark scripts)
+
+### Installation & Execution
+
+1. **Clone Repository**:
+   ```bash
+   git clone https://github.com/Madhavhk04/CartCo.git
+   cd CartCo
+   ```
+
+2. **Spin Up Infrastructure Services**:
+   ```bash
+   docker-compose -f docker/docker-compose.yml up -d
+   ```
+   *MinIO Console will be accessible at `http://localhost:9001` (Credentials: `minioadmin` / `minioadmin`).*
+
+3. **Initialize Virtual Environment & Dependencies**:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   pip install -r dashboard-react/backend/requirements.txt pytest pyspark delta-spark
+   ```
+
+4. **Generate Synthetic Data & Execute Pipeline**:
+   ```bash
+   # 1. Generate 100k+ multi-channel records
+   python spark_jobs/data_generator.py
+
+   # 2. Run Bronze ingestion
+   python spark_jobs/ingest_to_bronze.py
+
+   # 3. Run Silver cleaning & Data Quality checks
+   python spark_jobs/bronze_to_silver_job.py
+
+   # 4. Run Gold business aggregations
+   python spark_jobs/silver_to_gold_job.py
+   ```
+
+5. **Run Backend & Frontend locally**:
+   ```bash
+   # Backend API
+   cd dashboard-react/backend
+   uvicorn main:app --reload --port 8000
+
+   # Frontend Dashboard (in a separate terminal)
+   cd dashboard-react
+   npm install
+   npm run dev
+   ```
+
+6. **Run Test Suite**:
+   ```bash
+   pytest tests/
+   ```
 
 ---
 
-## Internship Roadmap (5-Week Implementation)
+## 6. Data Layer & Schemas
 
-### Week 1: Requirements Analysis & Docker Architecture
-*   Define storage topology and network mapping for MinIO, Airflow, and Marquez.
-*   Standardize local environment setups.
-*   **Milestone**: Docker Compose environment spinning up successfully.
+The platform ingests 6 multi-channel source streams into the **Medallion Lakehouse architecture**:
+- `amazon_orders.csv`, `flipkart_orders.csv`, `shopify_orders.csv`
+- `inventory.csv`, `customers.csv`, `products.csv`
 
-### Week 2: Data Generation & Ingestion (Bronze)
-*   Implement self-contained retail dataset generator.
-*   Configure Spark Delta connectors to MinIO.
-*   Write PySpark jobs to ingest raw data into Bronze tables.
-*   **Milestone**: 100,000+ records successfully loaded to Bronze.
-
-### Week 3: Cleaning, Standardisation & Data Quality (Silver)
-*   Standardize date parsers and clean strings.
-*   Deduplicate orders and handle null records.
-*   Integrate Great Expectations with PySpark dataset validations.
-*   **Milestone**: Data cleaning jobs executing and writing clean Silver records.
-
-### Week 4: Business Intelligence Aggregations (Gold)
-*   Formulate window analytical functions in Spark to compute customer profiles (LTV, favored channels).
-*   Implement stock turnover ratios and classification metrics.
-*   Write scheduled Airflow DAGs.
-*   **Milestone**: Gold marts updated and validated.
-
-### Week 5: Dashboard Visualization & Lineage Explorer
-*   Build premium dark-theme React SPA using Tailwind CSS, Recharts, and Lucide Icons.
-*   Design high-performance FastAPI backend API with Delta Lake S3 integration.
-*   Implement responsive visual layouts, interactive charts, and data lineage mapping.
-*   **Milestone**: Full platform visualization working, recruiter-ready presentation complete.
+Data schemas, JSON data contracts, partition keys, schema evolution rules, and quarantine policies are documented in detail in [`/docs/data.md`](docs/data.md).
 
 ---
 
-## Git Commit Recommendations
+## 7. Architecture Decision Records (ADRs)
 
-*   **Feat**: Implement `data_generator.py` for multi-channel commerce simulation.
-*   **Docker**: Set up PostgreSQL, Airflow, and MinIO multi-service compose network.
-*   **Spark**: Implement Bronze ingestion job and Silver standardization pipelines.
-*   **Quality**: Integrate Great Expectations inline validation suite for Silver.
-*   **Gold**: Build analytical SQL aggregates for Customer 360 and Inventory.
-*   **Dashboard**: Implement Streamlit application pages for executive metrics.
-*   **Test**: Add unit and integration test coverage for PySpark jobs.
+All architectural choices, trade-off analyses, and technology selections are recorded in standard ADR format within [`/docs/adr/`](docs/adr/):
+
+- [`ADR-001: Delta Lake vs Apache Iceberg`](docs/adr/ADR-001_Delta_vs_Iceberg.md)
+- [`ADR-002: Apache Airflow vs Prefect for Orchestration`](docs/adr/ADR-002_Airflow_vs_Prefect.md)
+- [`ADR-003: Partitioning & Indexing Strategy`](docs/adr/ADR-003_Partitioning_Strategy.md)
+- [`ADR-004: Multi-Channel Synthetic Telemetry Generation`](docs/adr/ADR-004_Synthetic_Data_Strategy.md)
+- [`ADR-005: Schema Evolution & Contract Quarantine Policy`](docs/adr/ADR-005_Schema_Evolution_Policy.md)
+- [`ADR-006: Ingestion Tool Choice (PySpark Native vs Meltano/Airbyte)`](docs/adr/ADR-006_Ingestion_Tool_Choice.md)
 
 ---
 
-## Recruiter-Ready Resume Bullets
+## 8. Known Limitations
 
-Highlight this project on your resume with these bullet points:
+1. **Local PySpark Standalone Engine**: Local execution uses single-node PySpark standalone master; production scaling requires Databricks or EMR deployment.
+2. **Batch-Oriented Ingestion Window**: Ingestion runs on scheduled 15-minute Airflow batch windows rather than real-time Spark Structured Streaming feeds.
+3. **Mock Authentication**: The executive dashboard operates with role-based mock headers rather than enterprise OAuth2/OIDC single sign-on.
 
-* **Engineered a 3-Tier Medallion Lakehouse Platform** in PySpark on top of S3-compatible MinIO object storage to consolidate fragmented sales transactions from 5 multi-channel feeds (Shopify, Amazon, Flipkart, POS, CSV drops) for a ₹4,000 Cr GMV retailer.
-* **Enforced Schema-as-Code Data Contracts** using JSON Schema rules directly inside PySpark ingestion boundaries, eliminating downstream format discrepancies and filtering anomalous payloads into quarantine locations.
-* **Designed 4-Stage Orchestrated Data Pipelines** inside Apache Airflow utilizing Great Expectations datasets validation rules to guarantee 100% data quality compliance across conformed Delta Lake tables.
-* **Optimized Spark Read Queries and Reduced Storage Costs** by implementing automated Delta compaction (`OPTIMIZE`) with **Z-Order indexing** by `customer_id` and history vacuuming (`VACUUM`) routines, cutting file fragment footprints by 45%.
-* **Architected Metadata Observability and Catalog Lineage** using OpenLineage and Marquez APIs to enable column-level lineage tracking, and wrote automated table/column registry comments to construct a transparent data catalog for downstream BI analysts.
+---
 
+## 9. 2-Week Extension Roadmap
+
+If granted 2 additional weeks of development time:
+
+- [ ] **Streaming Ingestion**: Migrate Bronze ingestion from batch CSV files to Kafka + Spark Structured Streaming (`readStream`).
+- [ ] **Debezium CDC Integration**: Capture physical POS relational database changes in real-time via Change Data Capture (CDC).
+- [ ] **Automated Data Quality Remediation**: Implement automated dead-letter queue processing and AI-assisted data cleansing for quarantined records.
+- [ ] **Data Catalog Integration**: Connect Marquez metadata registry with DataHub for automated data governance.
+
+---
+
+## 10. Deliverable Documentation Artifacts
+
+- 📄 **Data Layer Specification**: [`/docs/data.md`](docs/data.md)
+- 🧪 **Test & Quality Audit Report**: [`/docs/test_report.md`](docs/test_report.md)
+- 📐 **C4 Architecture Narrative**: [`/docs/architecture.md`](docs/architecture.md)
+- 💡 **Technical Thinking Artifact**: [`/docs/thinking_artifact.md`](docs/thinking_artifact.md)
+- 📢 **Presence Artifact & Blog Post**: [`/docs/presence_artifact.md`](docs/presence_artifact.md)
+- 💼 **Resume Bullets Package**: [`/docs/resume_bullets.md`](docs/resume_bullets.md)
+- 🎯 **Technical Mock Interview Q&A**: [`/docs/mock_interview.md`](docs/mock_interview.md)
+- 🛠️ **Engineering Postmortem**: [`/docs/postmortem.md`](docs/postmortem.md)
+- 📊 **Executive Showcase Slide**: [`/docs/showcase_slide.md`](docs/showcase_slide.md)
+- 🚀 **Interview-Readiness Package**: [`/docs/interview_readiness.md`](docs/interview_readiness.md)
+- 📝 **Final Resume**: [`/docs/resume_final.md`](docs/resume_final.md)
+
+---
+
+## 11. License & Acknowledgements
+
+This project is licensed under the **MIT License**.
+
+**Acknowledgements**: Built as part of the 5-week B.Tech CSE-AIDE Internship (22 June 2026 – 26 July 2026). Special thanks to the open-source communities behind Delta Lake, Apache Spark, Apache Airflow, Great Expectations, OpenLineage, Marquez, FastAPI, and React.
